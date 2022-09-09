@@ -1,3 +1,14 @@
+from Core import HSphereSMOTE
+from Utils import utils
+from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import ADASYN
+from torch.autograd import Variable
+import torch
+import copy
+import torch.nn as nn
+import torch.optim as optim
+
+
 # FUNCTION TO TRAIN THE CLASSIIFER
 def train_classifier(cl, opt, loss, x, y):
     x.to(device)
@@ -209,8 +220,6 @@ def SK_SMOTE(X, Y):
     sm = SMOTE()
     Xtr2, Ytr2 = sm.fit_resample(X, Y)
 
-    counter = Counter(Ytr2)
-    #print(counter)
 
     Xtr2 = torch.from_numpy(Xtr2)
     Ytr2 = torch.from_numpy(Ytr2)
@@ -381,3 +390,151 @@ def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
         o_xsample = u_or.xsyn[r]
         o_ysample = u_or.ysyn[r]
         print(o_xsample.shape)
+
+
+
+def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
+                        partial_epochs, batch_size=128, iid=True, test_data='', test_labels='',
+                        gdata='', glabel=''):
+
+    nusers = len(training_labels)
+    p0 = 1/nusers
+
+    #TRAINING PARAMETERS (TO BE CHANGED: THIS SHOULD BE GIVEN AS A PARAMETER)
+    epochs = g_epochs #TOTAL NUMBER OF TRAINING ROUNDS
+    partial_epochs = partial_epochs #NUMBER OF EPOCHS RUN IN EACH CLIENT BEFORE SENDING BACK THE MODEL UPDATE
+    batch_size = batch_size #BATCH SIZE
+
+
+    print("Creating users...")
+    users = []
+
+    #Number of training points from class 0 for every user
+    n0users = torch.zeros(nusers)
+    #Number of training points from class 1 for every user
+    n1users = torch.zeros(nusers)
+
+    for i in range(nusers):
+        users.append(user(training_data[i],training_labels[i],p0,i+1))
+        n1users[i] = training_labels[i].sum()
+        n0users[i] = training_labels[i].size(0) - training_labels[i].sum()
+        if iid == True:
+            users[i].xtst = test_data[i]
+            users[i].ytst = test_labels[i]
+
+
+    #Total number of training samples from class 0 and 1
+    N0 = n0users.sum().numpy()
+    N1 = n1users.sum().numpy()
+
+    ntr = 0
+    v_sum = 0
+    for u in users:
+        ntr += u.xtr.size(0)
+        v = utils.getvariance(u.xtr)
+        u.v = torch.norm(v, float('inf'))
+        print(u.v)
+        v_sum += u.v
+
+
+    #CREATE MODEL
+    model = Classifier_nonIID().to(device)
+    errorsEpochs = torch.zeros(epochs)
+
+    # Weight the value of the update of each user according to the number of training data points
+    # Assign model to each user
+    for u in users:
+        datasize = u.xtr.size(0)/ntr
+        datavar = (u.v/v_sum)
+        u.p = lam*datavar + (1-lam)*datasize
+        print("Weight for user ", u.id, ": ", np.round(u.p,3))
+        u.model = copy.deepcopy(model).to(device)
+        #u.opt = optim.SGD(u.model.parameters(), lr=0.0001, momentum=0.9, weight_decay=1e-3)
+        u.opt = optim.Adam(u.model.parameters(), lr=0.0001, weight_decay=1e-5)
+        u.loss = nn.BCELoss()
+        u.auc = 0.0
+
+
+    for e in range(epochs):
+        print("Epoch... ",e)
+        epoch_i_array.append(e)
+
+        #Share model with the users
+        for u in range(len(users)):
+
+            if (mode == 1):
+                #DOWNSAMPLE
+                ratio = float(N0/N1)
+                error, pred = train_user_downsampling(users[u],partial_epochs,batch_size,ratio,e)
+
+            if (mode == 2):
+                #UPSAMPLE
+                ratio = float(N1/N0)
+                error, pred = train_user_upsampling(users[u],partial_epochs,batch_size,ratio, e)
+
+            if (mode == 3):
+                #SMOTE
+                ratio = float(N0/N1)
+                error, pred = train_user_SMOTE(users[u],partial_epochs,batch_size, e)
+                errlist[u].append(error)
+
+            if (mode == 4):
+                #UPSAMPLE
+                ratio = float(N0/N1)
+                error, pred = train_user_ADASYN(u.model,u.opt,u.loss,
+                                                      u.xtr,u.ytr,partial_epochs,batch_size,ratio)
+
+            if (mode == 5):
+                #UPSAMPLE_FarK
+                #print("N0:", N0)
+                #print("N1:", N1)
+                ratio = 0.9
+                #print(ratio)
+                error, pred = train_user_FarK(users[u],partial_epochs,batch_size,ratio, 20, e, nusers)
+                print("Loss:", error)
+                errlist[u].append(error)
+
+            if (mode == 6):
+                #without rebalanced peer-to-peer
+                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size)
+                print("Loss:", error)
+                errlist[u].append(error)
+
+
+
+        #Compute test accuracy
+
+        if iid == True:
+            auc = 0.0
+            for u in range(len(users)):
+                print("User:", u)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst)
+                auclist[u].append(auc_u)
+                fslist[u].append(fs)
+                fplist[u].append(fpr)
+                fnlist[u].append(fnr)
+                parlist[u].append(par)
+                raplist[u].append(rap)
+
+        else:
+            for u in range(len(users)):
+                print("User:", u)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel)
+                auclist[u].append(auc_u)
+                fslist[u].append(fs)
+                fplist[u].append(fpr)
+                fnlist[u].append(fnr)
+                parlist[u].append(par)
+                raplist[u].append(rap)
+
+
+        #update_id = e % len(users)
+        for u in users:
+            comb = u.p
+            for j in users:
+                if j != u:
+                    print("merge model", u.id)
+                    merge_models_ptp(j, u, mode, nusers, comb)
+                    comb = 1.0
+
+    return errorsEpochs

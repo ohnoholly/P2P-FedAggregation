@@ -1,3 +1,5 @@
+import torch.nn as nn
+
 class Classifier_nonIID(nn.Module):
     def __init__(self):
         super(Classifier_nonIID,self).__init__()

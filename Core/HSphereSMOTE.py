@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 def dist(a, b):
     return math.sqrt(np.power(a - b, 2).sum())
