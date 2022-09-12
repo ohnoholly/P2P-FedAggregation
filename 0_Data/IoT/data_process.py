@@ -54,7 +54,7 @@ d1 = [tA1, tA2, tA3]
 
 
 #Creare Pickle files for the dataset being used
-with open("./N_BaIoT_d0.p", "wb") as handle:
+with open("./d0.p", "wb") as handle:
     pickle.dump(d0, handle, protocol = pickle.HIGHEST_PROTOCOL)
-with open("./N_BaIoT_d1.p", "wb") as handle:
+with open("./d1.p", "wb") as handle:
     pickle.dump(d1, handle, protocol = pickle.HIGHEST_PROTOCOL)

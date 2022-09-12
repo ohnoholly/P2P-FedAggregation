@@ -5,14 +5,34 @@ from Core import *
 import pandas as pd
 import torch
 import pickle
+import numpy as np
+import random
+import argparse
 
 if __name__ == "__main__":
 
+    # Seed
+    seed = 1
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('train_dataset', type=str)
+    parser.add_argument('--mode', type=float)
+
+    args = parser.parse_args()
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    PATH = "0_Data/IoT/"
-    d0 = pickle.load(open(PATH+'N_BaIoT_d0.p', 'rb'))
-    d1 = pickle.load(open(PATH+'N_BaIoT_d1.p', 'rb'))
+    PATH = "0_Data/"+args.train_dataset+"/"
+    d0 = pickle.load(open(PATH+'d0.p', 'rb'))
+    d1 = pickle.load(open(PATH+'d1.p', 'rb'))
 
 
     #Create non_IID data split and normalize data
@@ -35,6 +55,6 @@ if __name__ == "__main__":
     print("Data normalized")
 
 
-    errorsFA = train.trainFA_imbalanced(training_data, training_labels, 5, 0.8,
+    train.trainFA_imbalanced(training_data, training_labels, args.mode, 0.8,
                                         100, 5, device, iid=False, gdata=global_testdata,
                                         glabel=g_testlabels)
