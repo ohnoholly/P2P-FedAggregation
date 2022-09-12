@@ -1,16 +1,45 @@
 from Core import HSphereSMOTE
 from Utils import utils
+from Utils import models
 from imblearn.over_sampling import SMOTE
 from imblearn.over_sampling import ADASYN
+from sklearn import metrics
 from torch.autograd import Variable
 import torch
 import copy
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
 
+
+# CLASS TO MODEL THE USERS IN THE FEDERATED LEARNING TASK
+class user:
+    def __init__(self,x,y,p_i,idx):
+        self.xtr = x #Training data
+        self.ytr = y #Labels
+        self.p = p_i #Contribution to the overall model
+        self.n = x.size()[0] #Number of training points provided
+        self.id = idx #ID for the user
+        self.v = 0.0 # the data variance on user
+        self.share = 0 # the number of users this user has been shared
+        self.nos = 0 # Number for sample from other clients
+
+    xtst =[] #Test data
+    ytst =[] #Test label
+    model = models.Classifier_nonIID()
+    opt = []
+    loss = []
+    sim = []
+    p_epoch = []
+    xsyn = []
+    ysyn = []
+    o_xsyn = []
+    o_ysyn = []
+
+
 # FUNCTION TO TRAIN THE CLASSIIFER
-def train_classifier(cl, opt, loss, x, y):
+def train_classifier(cl, opt, loss, x, y, device):
     x.to(device)
     y.to(device)
     #Reset gradients
@@ -27,7 +56,7 @@ def train_classifier(cl, opt, loss, x, y):
     return err, pred
 
 #FUNCTION FOR PREDICTION
-def predict(net, Xtest):
+def predict(net, Xtest, device):
     net.to(device)
     Xtest.to(device)
     with torch.no_grad():
@@ -37,7 +66,7 @@ def predict(net, Xtest):
 
 
 # FUNCTION TO COMPUTE THE TEST ERROR, FALSE POSITIVE AND FALSE NEGATIVE RATE, AND AUC
-def computeTestErrors(cl,Xtst,Ytst):
+def computeTestErrors(cl,Xtst,Ytst, device):
     with torch.no_grad():
         err = 0
 
@@ -103,7 +132,7 @@ def computeTestErrors(cl,Xtst,Ytst):
     return auc, cl_error, false_positive_rate, false_negative_rate, p_at_r75, r_at_p75, fscore
 
 # FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER
-def train_user(cl,opt,loss,x,y,epochs,batch_size):
+def train_user(cl,opt,loss,x,y,epochs,batch_size, device):
     for i in range(epochs):
             #print("Epoch user: ",i)
             #Shuffle training data
@@ -113,7 +142,7 @@ def train_user(cl,opt,loss,x,y,epochs,batch_size):
             for beg_i in range(0, x.size(0), batch_size):
                 xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
                 ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-                err, pred = train_classifier(cl, opt, loss, xpo, ypo)
+                err, pred = train_classifier(cl, opt, loss, xpo, ypo, device)
     return err, pred
 
 
@@ -226,20 +255,11 @@ def SK_SMOTE(X, Y):
     Xtr2,Ytr2 = Xtr2.type(torch.FloatTensor),Ytr2.type(torch.FloatTensor)
     return Xtr2, Ytr2
 
-def SK_ADASYN(X, Y):
-    sm = ADASYN()
-    Xtr2, Ytr2 = sm.fit_sample(X, Y)
-
-    Xtr2 = torch.from_numpy(Xtr2)
-    Ytr2 = torch.from_numpy(Ytr2)
-    return Xtr2, Ytr2
-
-
 
 
 
 # FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH UPSAMPLING
-def train_user_upsampling(u,epochs,batch_size,ratio, global_e):
+def train_user_upsampling(u,epochs,batch_size,ratio, global_e, device):
 
     if global_e % 20 == 0:
         x2, y2 = upSample(u.xtr,u.ytr,ratio)
@@ -258,12 +278,12 @@ def train_user_upsampling(u,epochs,batch_size,ratio, global_e):
             for beg_i in range(0, x.size(0), batch_size):
                 xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
                 ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-                err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo)
+                err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo, device)
 
     return err, pred
 
 # FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH DOWNSAMPLING
-def train_user_downsampling(u,epochs,batch_size,ratio, global_e):
+def train_user_downsampling(u,epochs,batch_size,ratio, global_e, device):
 
     if global_e % 20 == 0:
         x2, y2 = downSample(u.xtr,u.ytr,ratio)
@@ -282,11 +302,11 @@ def train_user_downsampling(u,epochs,batch_size,ratio, global_e):
             for beg_i in range(0, x.size(0), batch_size):
                 xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
                 ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-                err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo)
+                err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo, device)
     return err, pred
 
 
-def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers):
+def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers, device):
 
 
     for i in range(epochs):
@@ -296,7 +316,7 @@ def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers):
         u.xtr = u.xtr[r]
         u.ytr = u.ytr[r]
 
-        xsyn, ysyn, nls, n0, n1 = FarK_Sampleing(u.xtr,u.ytr,ratio, k)
+        xsyn, ysyn, nls, n0, n1 = HSphereSMOTE.Sampling(u.xtr,u.ytr,ratio, k)
         u.xsyn = xsyn
         u.ysyn = ysyn
         if n0 > n1:
@@ -319,7 +339,7 @@ def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers):
         for beg_i in range(0, x.size(0), batch_size):
             xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
             ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-            err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo)
+            err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo, device)
 
     u.share = 0
     u.o_xsyn = []
@@ -330,7 +350,7 @@ def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers):
 
 
 # FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH UPSAMPLING
-def train_user_SMOTE(u,epochs,batch_size, global_e):
+def train_user_SMOTE(u,epochs,batch_size, global_e, device):
 
     for i in range(epochs):
         #print("Epoch user: ",i)
@@ -346,27 +366,10 @@ def train_user_SMOTE(u,epochs,batch_size, global_e):
         y = u.ysyn
 
 
-        #x2, y2 = SK_SMOTE(x,y)
         for beg_i in range(0, x.size(0), batch_size):
             xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
             ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-            err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo)
-    return err, pred
-
-
-# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH UPSAMPLING
-def train_user_ADASYN(cl,opt,loss,x,y,epochs,batch_size,ratio):
-    for i in range(epochs):
-            #print("Epoch user: ",i)
-            #Shuffle training data
-            r = torch.randperm(x.size()[0])
-            x = x[r]
-            y = y[r]
-            x2, y2 = SK_ADASYN(x,y)
-            for beg_i in range(0, x2.size(0), batch_size):
-                xpo = Variable(x2[beg_i:beg_i + batch_size, :]).to(device)
-                ypo = Variable(y2[beg_i:beg_i + batch_size]).to(device)
-                err, pred = train_classifier(cl, opt, loss, xpo, ypo)
+            err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo, device)
     return err, pred
 
 
@@ -394,7 +397,7 @@ def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
 
 
 def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
-                        partial_epochs, batch_size=128, iid=True, test_data='', test_labels='',
+                        partial_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
                         gdata='', glabel=''):
 
     nusers = len(training_labels)
@@ -438,7 +441,7 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
 
 
     #CREATE MODEL
-    model = Classifier_nonIID().to(device)
+    model = models.Classifier_nonIID().to(device)
     errorsEpochs = torch.zeros(epochs)
 
     # Weight the value of the update of each user according to the number of training data points
@@ -457,7 +460,7 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
 
     for e in range(epochs):
         print("Epoch... ",e)
-        epoch_i_array.append(e)
+        #epoch_i_array.append(e)
 
         #Share model with the users
         for u in range(len(users)):
@@ -465,40 +468,31 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
             if (mode == 1):
                 #DOWNSAMPLE
                 ratio = float(N0/N1)
-                error, pred = train_user_downsampling(users[u],partial_epochs,batch_size,ratio,e)
+                error, pred = train_user_downsampling(users[u],partial_epochs,batch_size,ratio,e, device)
 
             if (mode == 2):
                 #UPSAMPLE
                 ratio = float(N1/N0)
-                error, pred = train_user_upsampling(users[u],partial_epochs,batch_size,ratio, e)
+                error, pred = train_user_upsampling(users[u],partial_epochs,batch_size,ratio, e, device)
 
             if (mode == 3):
                 #SMOTE
                 ratio = float(N0/N1)
-                error, pred = train_user_SMOTE(users[u],partial_epochs,batch_size, e)
-                errlist[u].append(error)
+                error, pred = train_user_SMOTE(users[u],partial_epochs,batch_size, e, device)
+                #errlist[u].append(error)
 
-            if (mode == 4):
-                #UPSAMPLE
-                ratio = float(N0/N1)
-                error, pred = train_user_ADASYN(u.model,u.opt,u.loss,
-                                                      u.xtr,u.ytr,partial_epochs,batch_size,ratio)
+            if (mode ==4):
+                #HSphereSMOTE
+                ratio = 0.9
+                error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, e, nusers, device)
+                print("Loss:", error)
+                #errlist[u].append(error)
 
             if (mode == 5):
-                #UPSAMPLE_FarK
-                #print("N0:", N0)
-                #print("N1:", N1)
-                ratio = 0.9
-                #print(ratio)
-                error, pred = train_user_FarK(users[u],partial_epochs,batch_size,ratio, 20, e, nusers)
-                print("Loss:", error)
-                errlist[u].append(error)
-
-            if (mode == 6):
                 #without rebalanced peer-to-peer
-                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size)
+                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, device)
                 print("Loss:", error)
-                errlist[u].append(error)
+                #errlist[u].append(error)
 
 
 
@@ -508,24 +502,24 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
             auc = 0.0
             for u in range(len(users)):
                 print("User:", u)
-                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst)
-                auclist[u].append(auc_u)
-                fslist[u].append(fs)
-                fplist[u].append(fpr)
-                fnlist[u].append(fnr)
-                parlist[u].append(par)
-                raplist[u].append(rap)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst, device)
+                # auclist[u].append(auc_u)
+                # fslist[u].append(fs)
+                # fplist[u].append(fpr)
+                # fnlist[u].append(fnr)
+                # parlist[u].append(par)
+                # raplist[u].append(rap)
 
         else:
             for u in range(len(users)):
                 print("User:", u)
-                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel)
-                auclist[u].append(auc_u)
-                fslist[u].append(fs)
-                fplist[u].append(fpr)
-                fnlist[u].append(fnr)
-                parlist[u].append(par)
-                raplist[u].append(rap)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel, device)
+                # auclist[u].append(auc_u)
+                # fslist[u].append(fs)
+                # fplist[u].append(fpr)
+                # fnlist[u].append(fnr)
+                # parlist[u].append(par)
+                # raplist[u].append(rap)
 
 
         #update_id = e % len(users)
@@ -536,5 +530,3 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
                     print("merge model", u.id)
                     merge_models_ptp(j, u, mode, nusers, comb)
                     comb = 1.0
-
-    return errorsEpochs

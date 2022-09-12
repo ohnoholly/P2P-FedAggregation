@@ -1,5 +1,8 @@
 import numpy as np
+import math
+import torch
 from sklearn.neighbors import NearestNeighbors
+
 
 def dist(a, b):
     return math.sqrt(np.power(a - b, 2).sum())
@@ -81,7 +84,7 @@ def NNSMOTE(sample, orgdata, k, ns):
 
 
 
-def HSphereSMOTE(Xtr, Ytr, ratio, k):
+def Sampling(Xtr, Ytr, ratio, k):
 
     #Split the data according to the class
     n1 = int(Ytr.sum())

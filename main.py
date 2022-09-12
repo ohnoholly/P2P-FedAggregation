@@ -1,5 +1,6 @@
 from Utils import data_distribute
 from Utils import utils
+from Utils import train
 from Core import *
 import pandas as pd
 import torch
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     frtst1 = torch.tensor([0.26, 0.2, 0.23])
 
     frac_tr0 = 0.4 #fraction of training data
-    frac_tr1 = 0.1
+    frac_tr1 = 0.02
 
     frac_tst0 = 0.3 #fraction of testing data
     frac_tst1 = 0.05
@@ -32,3 +33,8 @@ if __name__ == "__main__":
     training_data = data_distribute.normalizeData_nonIID(training_data)
     global_testdata = utils.normalize(global_testdata)
     print("Data normalized")
+
+
+    errorsFA = train.trainFA_imbalanced(training_data, training_labels, 5, 0.8,
+                                        100, 5, device, iid=False, gdata=global_testdata,
+                                        glabel=g_testlabels)
