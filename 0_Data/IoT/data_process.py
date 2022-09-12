@@ -1,14 +1,16 @@
 import pandas as pd
+import torch
+import numpy as np
 import pickle
 
 DATA_PATH = "./"
 
-df_B1 = pd.read_csv(DATA_PATH+"/PT_838_Security Camera/benign_traffic.csv")
-df_A1 = pd.read_csv(DATA_PATH+"/PT_838_Security Camera/Mirai/ack.csv")
-df_B2 = pd.read_csv(DATA_PATH+"/XCS7_1002_WHT_Security_Camera/benign_traffic.csv")
-df_A2 = pd.read_csv(DATA_PATH+"/XCS7_1002_WHT_Security_Camera/Mirai/ack.csv")
-df_B3 = pd.read_csv(DATA_PATH+"/Danmini_Doorbell/benign_traffic.csv")
-df_A3 = pd.read_csv(DATA_PATH+"/Danmini_Doorbell/Mirai/ack.csv")
+df_B1 = pd.read_csv(DATA_PATH+"Provision_PT_838_Security_Camera/benign_traffic.csv")
+df_A1 = pd.read_csv(DATA_PATH+"Provision_PT_838_Security_Camera/ack.csv")
+df_B2 = pd.read_csv(DATA_PATH+"XCS7_1002_WHT_Security_Camera/benign_traffic.csv")
+df_A2 = pd.read_csv(DATA_PATH+"XCS7_1002_WHT_Security_Camera/ack.csv")
+df_B3 = pd.read_csv(DATA_PATH+"Danmini_Doorbell/benign_traffic.csv")
+df_A3 = pd.read_csv(DATA_PATH+"Danmini_Doorbell/ack.csv")
 
 #Sample the data according to its portion
 total = len(df_A1)
@@ -52,7 +54,7 @@ d1 = [tA1, tA2, tA3]
 
 
 #Creare Pickle files for the dataset being used
-with open("./N_BaIoT_PrivateA_features_a.p", "wb") as handle:
-    pickle.dump(x_a_private, handle, protocol = pickle.HIGHEST_PROTOCOL)
-with open("./N_BaIoT_PrivateA_labels_a.p", "wb") as handle:
-    pickle.dump(y_a_private, handle, protocol = pickle.HIGHEST_PROTOCOL)
+with open("./N_BaIoT_d0.p", "wb") as handle:
+    pickle.dump(d0, handle, protocol = pickle.HIGHEST_PROTOCOL)
+with open("./N_BaIoT_d1.p", "wb") as handle:
+    pickle.dump(d1, handle, protocol = pickle.HIGHEST_PROTOCOL)
