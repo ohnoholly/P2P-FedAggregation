@@ -15,7 +15,7 @@ import torch.optim as optim
 
 # CLASS TO MODEL THE USERS IN THE FEDERATED LEARNING TASK
 class user:
-    def __init__(self,x,y,p_i,idx):
+    def __init__(self,x,y,p_i,idx, model):
         self.xtr = x #Training data
         self.ytr = y #Labels
         self.p = p_i #Contribution to the overall model
@@ -24,10 +24,11 @@ class user:
         self.v = 0.0 # the data variance on user
         self.share = 0 # the number of users this user has been shared
         self.nos = 0 # Number for sample from other clients
+        self.model = model
+
 
     xtst =[] #Test data
     ytst =[] #Test label
-    model = models.Classifier_nonIID()
     opt = []
     loss = []
     sim = []
@@ -396,7 +397,7 @@ def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
 
 
 
-def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
+def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_epochs,
                         partial_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
                         gdata='', glabel=''):
 
@@ -417,8 +418,11 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
     #Number of training points from class 1 for every user
     n1users = torch.zeros(nusers)
 
+    #CREATE MODEL
+    model = the_model.to(device)
+
     for i in range(nusers):
-        users.append(user(training_data[i],training_labels[i],p0,i+1))
+        users.append(user(training_data[i],training_labels[i],p0,i+1, model))
         n1users[i] = training_labels[i].sum()
         n0users[i] = training_labels[i].size(0) - training_labels[i].sum()
         if iid == True:
@@ -440,9 +444,6 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
         v_sum += u.v
 
 
-    #CREATE MODEL
-    model = models.Classifier_nonIID().to(device)
-    errorsEpochs = torch.zeros(epochs)
 
     # Weight the value of the update of each user according to the number of training data points
     # Assign model to each user
@@ -460,7 +461,6 @@ def trainFA_imbalanced(training_data, training_labels, mode, lam, g_epochs,
 
     for e in range(epochs):
         print("Epoch... ",e)
-        #epoch_i_array.append(e)
 
         #Share model with the users
         for u in range(len(users)):

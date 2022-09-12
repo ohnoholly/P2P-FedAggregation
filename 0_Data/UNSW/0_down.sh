@@ -1,0 +1,1 @@
+wget -O UNSW_2018_IoT_Botnet_Final_10_Best.csv "https://cloudstor.aarnet.edu.au/plus/s/umT99TnxvbpkkoE/download?path=%2FCSV%2FTraning%20and%20Testing%20Tets%20(5%25%20of%20the%20entier%20dataset)%2F10-best%20features&files=UNSW_2018_IoT_Botnet_Final_10_Best.csv"

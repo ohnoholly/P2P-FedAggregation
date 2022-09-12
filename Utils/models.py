@@ -39,7 +39,7 @@ class Classifier_nonIID(nn.Module):
 class Classifier_nonIIDUNSW(nn.Module):
     def __init__(self):
         super(Classifier_nonIIDUNSW,self).__init__()
-        self.fc1 = nn.Linear(9,  20)
+        self.fc1 = nn.Linear(10,  20)
         self.bn1 = nn.BatchNorm1d(20)
         self.relu1 = nn.LeakyReLU(negative_slope=0.1)
         self.drop1 = nn.Dropout(p=0.1)

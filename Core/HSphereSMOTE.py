@@ -38,7 +38,7 @@ def least_indices(array: np.ndarray, n: int) -> tuple:
 
 
 
-def NNSMOTE(sample, orgdata, k, ns):
+def NNSMOTE(sample, orgdata, k, ns, nf):
     """
     Find k nearest neighbors for specific sample
     """
@@ -73,7 +73,7 @@ def NNSMOTE(sample, orgdata, k, ns):
         max_inds = largest_indices(dist_array, 1)
         radius = np.absolute(s-neighbor[max_inds])
 
-        syn = np.random.normal(x_c, radius, (ns,115))
+        syn = np.random.normal(x_c, radius, (ns,nf))
         synth = np.concatenate((synth, syn), axis = 0)
 
 
@@ -98,6 +98,8 @@ def Sampling(Xtr, Ytr, ratio, k):
     y1 = Ytr[idx1]
     # The number of the majority class
     n0 = n - n1
+    # The number of the features
+    nf = x0.shape[1]
 
     Xtr2 = np.empty([0,Xtr.size(1)])
     Ytr2 = np.empty(0)
@@ -118,7 +120,7 @@ def Sampling(Xtr, Ytr, ratio, k):
 
         # The number of synthetic points per chosen sample
         ns = round(up/k)
-        Xtr2 = NNSMOTE(samples, datas, 20, ns)
+        Xtr2 = NNSMOTE(samples, datas, 20, ns, nf)
         Ytr2 = np.ones(len(Xtr2))
 
     else:
@@ -134,7 +136,7 @@ def Sampling(Xtr, Ytr, ratio, k):
 
         # The number of synthetic points per chosen sample
         ns = round(up/k)
-        Xtr2 = NNSMOTE(samples, datas, 20, ns)
+        Xtr2 = NNSMOTE(samples, datas, 20, ns, nf)
         Ytr2 = np.zeros(len(Xtr2))
 
 
