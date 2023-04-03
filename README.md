@@ -1,1 +1,1 @@
-# P2PK-SMOTE
+# Peer-to-peer Federated Aggregation
