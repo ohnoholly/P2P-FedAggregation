@@ -76,5 +76,5 @@ if __name__ == "__main__":
 
 
     train.trainFA_imbalanced(model, training_data, training_labels, args.mode, 0.8,
-                                        100, 5, device, iid=False, gdata=global_testdata,
+                                        100, 4, device, iid=False, gdata=global_testdata,
                                         glabel=g_testlabels)

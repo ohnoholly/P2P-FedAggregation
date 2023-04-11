@@ -66,3 +66,28 @@ def getvariance(data, ddof=0):
     n = len(data)
     mean = sum(data) / n
     return sum((x - mean) ** 2 for x in data) / (n - ddof)
+
+
+# Generate a random network graph for k nodes
+def create_network(num_client):
+    adj_list = []
+    for i in range(num_client):
+        ad = [random.randint(0,1) for _ in range(num_client)]
+        ad[i] = 0
+        for j in range(len(adj_list)):
+            ad[j] = adj_list[j][i]
+
+        print(sum(ad))
+        adj_list.append(ad)
+
+    return adj_list
+
+
+
+def create_list(num_list):
+    name_list = []
+    for i in range(num_list):
+        li = []
+        name_list.append(li)
+
+    return name_list
