@@ -231,7 +231,7 @@ class model_update:
             end_share_time = time.time()
             share_time = end_share_time - start_share_time
             print("share_time:", share_time)
-        
+
         if u_or.adv_flag==False and len(u_or.xsyn)!=0 and u_or.share < sum(adj_list[u_or.id-1]) and shared==True:
             r = torch.randperm(math.floor(u_dest.nos/(sum(adj_list[u_or.id-1]))))
             o_xsample = u_or.xsyn[r]

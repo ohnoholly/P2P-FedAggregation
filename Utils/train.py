@@ -1,4 +1,5 @@
 from Core import HSphereSMOTE
+from Core import P2P_Aggregation
 from Utils import utils
 from Utils import models
 from imblearn.over_sampling import SMOTE
@@ -144,7 +145,7 @@ def computeTestErrors(cl,Xtst,Ytst, device):
 
     return auc, cl_error, false_positive_rate, false_negative_rate, p_at_r75, r_at_p75, fscore
 
-# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER
+# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITHOUT REBALANCING
 def train_user(cl,opt,loss,x,y,epochs,batch_size, device):
     for i in range(epochs):
             #print("Epoch user: ",i)
@@ -318,8 +319,8 @@ def train_user_downsampling(u,epochs,batch_size,ratio, global_e, device):
                 err, pred = train_classifier(u.model, u.opt, u.loss, xpo, ypo, device)
     return err, pred
 
-
-def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers, device):
+# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH HSphereSMOTE
+def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, nusers, device):
 
 
     for i in range(epochs):
@@ -362,8 +363,8 @@ def train_user_HSphereSMOTE(u,epochs,batch_size,ratio, k, global_e, nusers, devi
 
 
 
-# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH UPSAMPLING
-def train_user_SMOTE(u,epochs,batch_size, global_e, device):
+# FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITH SMOTE
+def train_user_SMOTE(u,epochs,batch_size, device):
 
     for i in range(epochs):
         #print("Epoch user: ",i)
@@ -455,8 +456,6 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
         print(u.v)
         v_sum += u.v
 
-
-
     # Weight the value of the update of each user according to the number of training data points
     # Assign model to each user
     for u in users:
@@ -476,65 +475,23 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
 
         #Share model with the users
         for u in range(len(users)):
+            ratio = 0.9
+            error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, nusers, device)
+            print("Loss:", error)
 
-            if (mode == 1):
-                #DOWNSAMPLE
-                ratio = float(N0/N1)
-                error, pred = train_user_downsampling(users[u],partial_epochs,batch_size,ratio,e, device)
-
-            if (mode == 2):
-                #UPSAMPLE
-                ratio = float(N1/N0)
-                error, pred = train_user_upsampling(users[u],partial_epochs,batch_size,ratio, e, device)
-
-            if (mode == 3):
-                #SMOTE
-                ratio = float(N0/N1)
-                error, pred = train_user_SMOTE(users[u],partial_epochs,batch_size, e, device)
-                #errlist[u].append(error)
-
-            if (mode ==4):
-                #HSphereSMOTE
-                ratio = 0.9
-                error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, e, nusers, device)
-                print("Loss:", error)
-                #errlist[u].append(error)
-
-            if (mode == 5):
-                #without rebalanced peer-to-peer
-                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, device)
-                print("Loss:", error)
-                #errlist[u].append(error)
-
-
-
-        #Compute test accuracy
 
         if iid == True:
             auc = 0.0
             for u in range(len(users)):
                 print("User:", u)
                 auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst, device)
-                # auclist[u].append(auc_u)
-                # fslist[u].append(fs)
-                # fplist[u].append(fpr)
-                # fnlist[u].append(fnr)
-                # parlist[u].append(par)
-                # raplist[u].append(rap)
 
         else:
             for u in range(len(users)):
                 print("User:", u)
                 auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel, device)
-                # auclist[u].append(auc_u)
-                # fslist[u].append(fs)
-                # fplist[u].append(fpr)
-                # fnlist[u].append(fnr)
-                # parlist[u].append(par)
-                # raplist[u].append(rap)
 
 
-        #update_id = e % len(users)
         for u in users:
             comb = u.p
             for j in users:
@@ -545,16 +502,18 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
 
 
 
-def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data='', test_labels='', gdata='', glabel=''):
+def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
+                        partial_epochs, tune_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
+                        gdata='', glabel='', balanced=True):
 
     nusers = len(training_labels)
     p0 = 1/nusers
 
     #TRAINING PARAMETERS (TO BE CHANGED: THIS SHOULD BE GIVEN AS A PARAMETER)
-    epochs = 100 #TOTAL NUMBER OF TRAINING ROUNDS
-    partial_epochs = 5 #NUMBER OF EPOCHS RUN IN EACH CLIENT BEFORE SENDING BACK THE MODEL UPDATE
-    tune_epochs = 1
-    batch_size = 128 #BATCH SIZE
+    epochs = g_epochs #TOTAL NUMBER OF TRAINING ROUNDS
+    partial_epochs = partial_epochs #NUMBER OF EPOCHS RUN IN EACH CLIENT BEFORE SENDING BACK THE MODEL UPDATE
+    tune_epochs = tune_epochs
+    batch_size = batch_size #BATCH SIZE
     ad_array = np.array(adj_list)
     conn = np.sum(ad_array, 1)
     deg = np.sum(ad_array)
@@ -564,8 +523,8 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
     print("Creating users...")
     users = []
     #TopK-Sparsification
-    compressor = TopKCompressor()
-    updater = model_update()
+    compressor = P2P_Aggregation.TopKCompressor()
+    updater = P2P_Aggregation.model_update()
 
     #Number of training points from class 0 for every user
     n0users = torch.zeros(nusers)
@@ -591,14 +550,14 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
         ntr = 0 #number of all connected training set
         v_sum = 0
         ntr += u.xtr.size(0)
-        v = getvariance(u.xtr)
+        v = utils.getvariance(u.xtr)
         u.v = torch.norm(v, float('inf'))
         v_sum += u.v
         ids = 0
         for ad in adj_list[u.id-1]:
             if ad == 1:
                 ntr += users[ids].xtr.size(0)
-                v = getvariance(users[ids].xtr)
+                v = utils.getvariance(users[ids].xtr)
                 users[ids].v = torch.norm(v, float('inf'))
                 v_sum += users[ids].v
 
@@ -611,7 +570,7 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
 
 
     #CREATE MODEL
-    model = Classifier_nonIID().to(device)
+    model = the_model.to(device)
     errorsEpochs = torch.zeros(epochs)
 
     # Weight the value of the update of each user according to the number of training data points
@@ -675,32 +634,28 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
     print(second)
     print(third)
 
-
     pre_e = 1
     for e in range(epochs):
         print("Epoch... ",e)
         epoch_i_array.append(e)
 
+        if balanced == True:
+            #Share model with the users
+            for u in range(len(users)):
+                print(users[u].adv_flag)
+                start = time.time()
+                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, users[u].poison_flag)
+                end = time.time()
+                local_training_time = end-start
+                print("training_time:", local_training_time)
+                print("Loss:", error)
+        else:
+            #Share model with the users
+            for u in range(len(users)):
+                print(users[u].adv_flag)
+                ratio = 0.9
+                error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, e, nusers, device)
 
-        #Share model with the users
-        for u in range(len(users)):
-            print(users[u].adv_flag)
-            start = time.time()
-            error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, users[u].poison_flag)
-            end = time.time()
-            local_training_time = end-start
-            print("training_time:", local_training_time)
-            print("Loss:", error)
-            errlist[u].append(error)
-
-        """
-        #Share model with the users
-        for u in range(len(users)):
-            print(users[u].adv_flag)
-            error, pred = train_user_FarK(users[u],partial_epochs,batch_size,0.7, 15, e, nusers)
-            print("Loss:", error)
-            errlist[u].append(error)
-        """
 
 
         #Compute test accuracy
@@ -710,26 +665,12 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
             for u in range(len(users)):
                 print("User:", u)
                 auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst)
-                auclist[u].append(auc_u)
-                valerrlist[u].append(cl_error)
-                fslist[u].append(fs)
-                fplist[u].append(fpr)
-                fnlist[u].append(fnr)
-                parlist[u].append(par)
-                raplist[u].append(rap)
 
 
         else:
             for u in range(len(users)):
                 print("User:", u)
                 auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel)
-                auclist[u].append(auc_u)
-                valerrlist[u].append(cl_error)
-                fslist[u].append(fs)
-                fplist[u].append(fpr)
-                fnlist[u].append(fnr)
-                parlist[u].append(par)
-                raplist[u].append(rap)
 
         """
         Create the mask for random-K sparsification.
@@ -746,8 +687,6 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
         Launch the attacks
         """
         #Launch attack in epoch 50
-
-
 
         #if e == 0:
             #Label flipping attack
@@ -821,22 +760,6 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
             users[u].ne_div.append(div_sum)
 
         """
-        Baseline: Trimmed mean
-        """
-        #trimmed_mean(users, adj_list, compressor, shared)
-        """
-        Baseline: Median
-        """
-        #get_median(users, adj_list, compressor, shared)
-
-        """
-        Baseline: Krum
-        """
-        #krum(users, adj_list, compressor, shared, 1)
-
-
-
-        """
         Tunning of the weight of node
         """
 
@@ -852,19 +775,14 @@ def trainP2P(training_data, training_labels, lam, adj_list, iid=True, test_data=
                     for ids, ad in enumerate(adj_list[u.id-1]):
                         #If the node is adjecent
                         if ad == 1:
-                            #pens = penal *(updater.divergence[u.id][ids+1][e]/u.ne_div[e])
-                            #score = ww[0]*u.ne_datasize[ids]+ww[1]*u.ne_var[ids]+ww[2]*u.ne_deg[ids]+ww[3]*(updater.similarity[u.id][ids+1][e]/u.ne_sim[e])-pens
-                            #score = ww[0]*u.ne_datasize[ids]+ww[1]*u.ne_var[ids]+ww[2]*u.ne_deg[ids]+ww[3]*(updater.similarity[u.id][ids+1][e]/u.ne_sim[e])
-                            score = ww[0]*u.ne_datasize[ids]+ww[1]*u.ne_var[ids]+ww[2]*u.ne_deg[ids]
-                            #print("pens:",pens)
+                            pens = penal *(updater.divergence[u.id][ids+1][e]/u.ne_div[e])
+                            score = ww[0]*u.ne_datasize[ids]+ww[1]*u.ne_var[ids]+ww[2]*u.ne_deg[ids]+ww[3]*(updater.similarity[u.id][ids+1][e]/u.ne_sim[e])-pens
                             print("Weight for user ", users[ids].id, ": ", np.round(score,3))
                             u_p[u.id-1][ids] = score
-                            #penalty = penalty + pens
+                            penalty = penalty + pens
 
 
-                    #u_weight = ww[0]*u.ne_datasize[u.id-1]+ww[1]*u.ne_var[u.id-1]+ww[2]*u.ne_deg[u.id-1]+ww[3]*(1/u.ne_sim[e])+penalty
-                    #u_weight = ww[0]*u.ne_datasize[u.id-1]+ww[1]*u.ne_var[u.id-1]+ww[2]*u.ne_deg[u.id-1]+ww[3]*(1/u.ne_sim[e])
-                    u_weight = ww[0]*u.ne_datasize[u.id-1]+ww[1]*u.ne_var[u.id-1]+ww[2]*u.ne_deg[u.id-1]
+                    u_weight = ww[0]*u.ne_datasize[u.id-1]+ww[1]*u.ne_var[u.id-1]+ww[2]*u.ne_deg[u.id-1]+ww[3]*(1/u.ne_sim[e])+penalty
                     print("Weight for user ", u.id, ": ", np.round(u_weight,3))
                     u_p[u.id-1][u.id-1] = u_weight
                     u_p[u.id-1] = [0 if i < 0 else i for i in u_p[u.id-1]]
