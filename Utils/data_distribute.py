@@ -1,5 +1,6 @@
 import torch
 
+
 def getData(frac0,frac1,frtst0,frtst1,frac_tr0,frac_tr1,frac_tst0,frac_tst1,d0='', d1=''):
 
     #frac0 is the fraction of the benign traffc, also includes the number of user

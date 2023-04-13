@@ -26,14 +26,21 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('train_dataset', type=str)
     parser.add_argument('--balanced', type=bool)
+    parser.add_argument('--fiveclient', action="store_true")
 
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     PATH = "0_Data/"+args.train_dataset+"/"
-    d0 = pickle.load(open(PATH+'d0.p', 'rb'))
-    d1 = pickle.load(open(PATH+'d1.p', 'rb'))
+    if args.fiveclient:
+        d0 = pickle.load(open(PATH+'d0.p', 'rb'))
+        d1 = pickle.load(open(PATH+'d1.p', 'rb'))
+    else:
+        d0 = pickle.load(open(PATH+'d0_clients.p', 'rb'))
+        d1 = pickle.load(open(PATH+'d1_clients.p', 'rb'))
+
+    print(len(d0))
 
     if (args.train_dataset == "IoT"):
         model =models.Classifier_nonIID()
