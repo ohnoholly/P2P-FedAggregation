@@ -30,6 +30,8 @@ if __name__ == "__main__":
     parser.add_argument('--rebalancer', type=int)
     parser.add_argument('--attack_mode', type=int, required=False)
     parser.add_argument('--num_ads', type=int, required=False)
+    parser.add_argument('--random_network', action="store_true")
+    parser.add_argument('--num_client',  type=int, required=False)
 
     args = parser.parse_args()
 
@@ -129,7 +131,7 @@ if __name__ == "__main__":
     adj_list=[[0,1,1,1,1], [1,0,1,1,0], [1,1,0,0,1], [1,1,0,0,0], [1,0,1,0,0]]
 
 
-    if args.rebalancer ==0:
+    if args.rebalancer ==1:
         # REBALANCER
         train.trainFA_imbalanced(model, training_data, training_labels, 0.8,
                                             100, 5, device, iid=False, gdata=global_testdata,
