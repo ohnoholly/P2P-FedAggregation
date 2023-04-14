@@ -96,7 +96,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--fiveclient', action="store_true")
-    parser.add_argument('--num_client', type=int)
+    parser.add_argument('--num_client', type=int, required=False)
     args = parser.parse_args()
 
     if (args.fiveclient):
