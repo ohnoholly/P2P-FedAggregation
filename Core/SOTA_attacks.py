@@ -54,6 +54,19 @@ def label_flipping(user, ratio_flip):
 
     return fliped_ytr
 
+def flip_users(users, num_ad):
+     var = []
+     for u in users:
+         var.append(u.v.item())
+     sort_var = sorted(var, key=float, reverse=True)
+
+     for i in range(num_ad):
+         ad_id = var.index(sort_var[i])
+         fliped = label_flipping(users[ad_id], 0.95)
+         users[ad_id].ytr.copy_(fliped)
+         users[ad_id].adv_flag = True
+
+    return users
 
 
 def adding_noise(user, add_ratio):
@@ -77,6 +90,20 @@ def adding_noise(user, add_ratio):
 
     return noised_xtr, noised_ytr
 
+def noise_users(users, num_ad):
+    var = []
+    for u in users:
+        var.append(u.v.item())
+    sort_var = sorted(var, key=float, reverse=True)
+
+    for i in range(num_ad):
+        ad_id = var.index(sort_var[i])
+        noised_xtr, noised_ytr = adding_noise(users[ad_id], 2)
+        users[ad_id].xtr = noised_xtr
+        users[ad_id].ytr = noised_ytr
+        users[ad_id].adv_flag = True
+
+    return users
 
 def parameter_poison(user):
     params = user.model.named_parameters()
@@ -84,4 +111,28 @@ def parameter_poison(user):
     for name, param in dict_params.items():
         arb_param = torch.randn(param.size())
         dict_params[name].data.copy_(arb_param)
- 
+
+def perform_byzantine(users, num_ad):
+    var = []
+    for u in users:
+        var.append(u.v.item())
+    sort_var = sorted(var, key=float, reverse=True)
+
+    for i in range(num_ad):
+        ad_id = var.index(sort_var[i])
+        parameter_poison(users[ad_id])
+        users[ad_id].adv_flag = True
+
+
+ def obj_poison(users, num_ad):
+     var = []
+     for u in users:
+         var.append(u.v.item())
+     sort_var = sorted(var, key=float, reverse=True)
+
+     for i in range(num_ad):
+         ad_id = var.index(sort_var[i])
+         users[ad_id].poison_flag = True
+         users[ad_id].adv_flag = True
+
+    return users

@@ -120,7 +120,7 @@ def Sampling(Xtr, Ytr, ratio, k):
 
         # The number of synthetic points per chosen sample
         ns = round(up/k)
-        Xtr2 = NNSMOTE(samples, datas, 20, ns, nf)
+        Xtr2 = NNSMOTE(samples, datas, 10, ns, nf)
         Ytr2 = np.ones(len(Xtr2))
 
     else:

@@ -11,6 +11,7 @@ import copy
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import time
 
 
 
@@ -35,8 +36,8 @@ class user:
         self.ne_var = []
         self.ne_deg = []
         self.ne_params = {}
-        self.model = Classifier_nonIID()
-        self.tune_model = Classifier_nonIID()
+        self.model = models.Classifier_nonIID()
+        self.tune_model = models.Classifier_nonIID()
         self.opt = []
         self.tune_opt = []
         self.loss = []
@@ -53,7 +54,7 @@ class user:
 
 
 # FUNCTION TO TRAIN THE CLASSIIFER
-def train_classifier(cl, opt, loss, x, y, device):
+def train_classifier(cl, opt, loss, x, y, device, poison_flag=False):
     x.to(device)
     y.to(device)
     #Reset gradients
@@ -146,7 +147,7 @@ def computeTestErrors(cl,Xtst,Ytst, device):
     return auc, cl_error, false_positive_rate, false_negative_rate, p_at_r75, r_at_p75, fscore
 
 # FUNCTION TO TRAIN THE MODEL FOR A SPECIFIC USER WITHOUT REBALANCING
-def train_user(cl,opt,loss,x,y,epochs,batch_size, device):
+def train_user(cl,opt,loss,x,y,epochs,batch_size, poison_flag, device):
     for i in range(epochs):
             #print("Epoch user: ",i)
             #Shuffle training data
@@ -156,7 +157,7 @@ def train_user(cl,opt,loss,x,y,epochs,batch_size, device):
             for beg_i in range(0, x.size(0), batch_size):
                 xpo = Variable(x[beg_i:beg_i + batch_size, :]).to(device)
                 ypo = Variable(y[beg_i:beg_i + batch_size]).to(device)
-                err, pred = train_classifier(cl, opt, loss, xpo, ypo, device)
+                err, pred = train_classifier(cl, opt, loss, xpo, ypo, device, poison_flag)
     return err, pred
 
 
@@ -391,7 +392,7 @@ def train_user_SMOTE(u,epochs,batch_size, device):
 
 
 # FUNCTION TO MERGE THE MODELS
-def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
+def merge_models_ptp(u_or, u_dest, nusers, comb):
     params_dest = u_dest.model.named_parameters()
     dict_params_dest = dict(params_dest)
     params_or = u_or.model.named_parameters()
@@ -401,7 +402,7 @@ def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
                             comb*dict_params_dest[name1].data)
 
 
-    if len(u_or.xsyn)!=0 and u_or.share < (nusers-1) and mode ==5:
+    if len(u_or.xsyn)!=0 and u_or.share < (nusers-1):
         print(u_dest.xsyn.shape)
         r = torch.randperm(round(u_dest.nos/(nusers-1)))
         o_xsample = u_or.xsyn[r]
@@ -410,7 +411,7 @@ def merge_models_ptp(u_or, u_dest, mode, nusers, comb):
 
 
 
-def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_epochs,
+def trainFA_imbalanced(the_model, training_data, training_labels, lam, g_epochs,
                         partial_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
                         gdata='', glabel=''):
 
@@ -435,7 +436,7 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
     model = the_model.to(device)
 
     for i in range(nusers):
-        users.append(user(training_data[i],training_labels[i],p0,i+1, model))
+        users.append(user(training_data[i],training_labels[i],p0,i+1))
         n1users[i] = training_labels[i].sum()
         n0users[i] = training_labels[i].size(0) - training_labels[i].sum()
         if iid == True:
@@ -476,7 +477,7 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
         #Share model with the users
         for u in range(len(users)):
             ratio = 0.9
-            error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, nusers, device)
+            error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 10, nusers, device)
             print("Loss:", error)
 
 
@@ -497,14 +498,14 @@ def trainFA_imbalanced(the_model, training_data, training_labels, mode, lam, g_e
             for j in users:
                 if j != u:
                     print("merge model", u.id)
-                    merge_models_ptp(j, u, mode, nusers, comb)
+                    merge_models_ptp(j, u, nusers, comb)
                     comb = 1.0
 
 
 
 def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
                         partial_epochs, tune_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
-                        gdata='', glabel='', balanced=True):
+                        gdata='', glabel='', balanced=True, attack_mode=0, num_ads=1):
 
     nusers = len(training_labels)
     p0 = 1/nusers
@@ -584,8 +585,8 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
                 datasize = users[ids].xtr.size(0)/u.ne_ds
                 datavar = (users[ids].v/u.ne_dv)
                 #FedAvg
-                p = 1/sum(adj_list[u.id-1],1)
-                #p = lam*datavar + 0.5*(1-lam)*datasize + 0.5*(1-lam)*users[ids].deg
+                #p = 1/sum(adj_list[u.id-1],1)
+                p = lam*datavar + 0.5*(1-lam)*datasize + 0.5*(1-lam)*users[ids].deg
                 print("Weight for user ", users[ids].id, ": ", np.round(p,3))
                 ne_weight.append(p)
                 u.ne_datasize.append(datasize)
@@ -596,8 +597,8 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
                     datasize = u.xtr.size(0)/u.ne_ds
                     datavar = (u.v/u.ne_dv)
                     #FedAvg
-                    p = 1/sum(adj_list[u.id-1],1)
-                    #p = lam*datavar + 0.5*(1-lam)*datasize + 0.5*(1-lam)*u.deg
+                    #p = 1/sum(adj_list[u.id-1],1)
+                    p = lam*datavar + 0.5*(1-lam)*datasize + 0.5*(1-lam)*u.deg
                     print("Weight for user ", u.id, ": ", np.round(p,3))
                     ne_weight.append(p)
                     u.ne_datasize.append(datasize)
@@ -620,33 +621,20 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
         u.loss = nn.BCELoss()
         u.tune_loss = nn.BCELoss()
 
-    var = []
-    for u in users:
-        var.append(u.v.item())
-
-
-    sort_var = sorted(var, key=float, reverse=True)
-
-    max_id = var.index(sort_var[0])
-    second = var.index(sort_var[1])
-    third = var.index(sort_var[2])
-    print(max_id)
-    print(second)
-    print(third)
 
     pre_e = 1
     for e in range(epochs):
         print("Epoch... ",e)
-        epoch_i_array.append(e)
 
         if balanced == True:
             #Share model with the users
             for u in range(len(users)):
                 print(users[u].adv_flag)
                 start = time.time()
-                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, users[u].poison_flag)
+                error, pred = train_user(users[u].model,users[u].opt,users[u].loss,users[u].xtr,users[u].ytr,partial_epochs,batch_size, users[u].poison_flag, device)
                 end = time.time()
                 local_training_time = end-start
+                shared = False
                 print("training_time:", local_training_time)
                 print("Loss:", error)
         else:
@@ -655,7 +643,7 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
                 print(users[u].adv_flag)
                 ratio = 0.9
                 error, pred = train_user_HSphereSMOTE(users[u],partial_epochs,batch_size,ratio, 20, e, nusers, device)
-
+                shared = True
 
 
         #Compute test accuracy
@@ -664,23 +652,14 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
             auc = 0.0
             for u in range(len(users)):
                 print("User:", u)
-                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model,users[u].xtst,users[u].ytst, device)
 
 
         else:
             for u in range(len(users)):
                 print("User:", u)
-                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel)
+                auc_u, cl_error, fpr, fnr, par, rap, fs = computeTestErrors(users[u].model, gdata, glabel, device)
 
-        """
-        Create the mask for random-K sparsification.
-        """
-        #Create the mask for sparsification (rand and topk)
-        masks_dict = {}
-        for name, param in model.named_parameters():
-            size = list(param.shape)
-            mask = masks(size, 50).to(device)
-            masks_dict[name] = mask
 
 
         """
@@ -688,48 +667,18 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
         """
         #Launch attack in epoch 50
 
-        #if e == 0:
-            #Label flipping attack
-            #fliped_a = label_flipping(users[max_id], 0.95)
-            #fliped_b = label_flipping(users[second], 0.95)
-            #fliped_c = label_flipping(users[third], 0.95)
-            #users[max_id].ytr.copy_(fliped_a)
-            #users[second].ytr.copy_(fliped_b)
-            #users[third].ytr.copy_(fliped_c)
-
-            #Noise attack
-            #noised_xtr, noised_ytr = adding_noise(users[max_id], 2)
-            #noised_xsec, noised_ysec = adding_noise(users[second], 2)
-            #noised_xthi, noised_ythi = adding_noise(users[third], 2)
-
-            #users[max_id].xtr = noised_xtr
-            #users[max_id].ytr = noised_ytr
-            #users[second].xtr = noised_xsec
-            #users[second].ytr = noised_ysec
-            #users[third].xtr = noised_xthi
-            #users[third].ytr = noised_ythi
-
-            #Model poisoning
-            #users[max_id].poison_flag = True
-            #users[second].poison_flag = True
-            #users[third].poison_flag = True
-
-            #users[max_id].adv_flag = True
-            #users[second].adv_flag = True
-            #users[third].adv_flag = True
+        if e == 0 and attack_mode==1:
+            users = flip_users(users, num_ad)
+        if e == 0 and attack_mode==2:
+            users = noise_users(users, num_ad)
+        if e == 0 and attack_mode==3:
+            users = obj_poison(users, num_ad)
 
         #Byazantine attack
-        if e>=0:
-            parameter_poison(users[max_id])
-            #parameter_poison(users[second])
-            #parameter_poison(users[third])
-            if users[max_id].adv_flag == False:
-                users[max_id].adv_flag = True
-                #users[second].adv_flag = True
-                #users[third].adv_flag = True
+        if e>=0 and attack_mode==4:
+            perform_byzantine(users, num_ad)
 
 
-        shared = False
         """
         Model aggregation and updating
         """
@@ -767,7 +716,7 @@ def trainP2P(the_model, training_data, training_labels, lam, adj_list, g_epochs,
             start_tune_time = time.time()
             for u in users:
                 if u.adv_flag == False:
-                    ww, penal = Bayes_Optimizer(u, adj_list, updater, tune_epochs, batch_size, e)
+                    ww, penal = P2P_Aggregation.Bayes_Optimizer(u, adj_list, updater, tune_epochs, batch_size, e, device)
                     print("ww:",ww)
                     print("Penal:",penal)
 

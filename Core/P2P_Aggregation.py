@@ -1,5 +1,11 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
+import time
+from bayes_opt import BayesianOptimization
+from bayes_opt.logger import JSONLogger
+from bayes_opt.event import Events
+from Utils import train
 
 
 class TopKCompressor():
@@ -257,3 +263,65 @@ class model_update:
             if name1 in dict_params_dest:
                 dict_params_dest[name1].data.copy_(alpha_or*param1.data +
                             alpha_dest*dict_params_dest[name1].data)
+
+
+"""
+Create the mask for random-K sparsification.
+"""
+def random_k_mask(model):
+#Create the mask for sparsification (rand and topk)
+    masks_dict = {}
+    for name, param in model.named_parameters():
+        size = list(param.shape)
+        mask = masks(size, 50).to(device)
+        masks_dict[name] = mask
+
+
+
+def Bayes_Optimizer(u, adj_list, updater, tune_epochs, batch_size, e, device):
+
+    def objective(w1, w2, w3, w4, w5):
+        with torch.no_grad():
+            params_tune = u.tune_model.named_parameters()
+            dict_params = dict(params_tune)
+
+
+            penalty = 0.
+            scores = {}
+            for ids, ad in enumerate(adj_list[u.id-1]):
+            #If the node is adjecent
+                if ad == 1:
+                    pens = w5*(updater.divergence[u.id][ids+1][e]/u.ne_div[e])
+                    score = w1*u.ne_datasize[ids]+w2*u.ne_var[ids]+w3*u.ne_deg[ids]+w4*(updater.similarity[u.id][ids+1][e]/u.ne_sim[e])-pens
+                    penalty = penalty + pens
+                    scores[ids+1] = score
+
+            u_weight = w1*u.ne_datasize[u.id-1]+w2*u.ne_var[u.id-1]+w3*u.ne_deg[u.id-1]+w4*(1/u.ne_sim[e])+penalty
+            for ids, ad in enumerate(adj_list[u.id-1]):
+                if ad == 1:
+                    for name, param in dict_params.items():
+                        if name in u.ne_params[ids+1]:
+                            tune = u_weight*param + scores[ids+1]*u.ne_params[ids+1][name]
+                            dict_params[name].data.copy_(tune)
+                            
+        err, pred = train.train_user(u.tune_model,u.tune_opt,u.tune_loss,u.xtr,u.ytr, tune_epochs,batch_size, False, device)
+
+        return -err
+
+
+    tunner = BayesianOptimization(
+        f=objective,
+        pbounds={'w1': (0.1, 0.9), 'w2': (0.1, 0.2), 'w3': (0.1, 0.9),'w4': (0.1, 0.9),'w5': (0.4, 0.6)},
+        verbose=2,
+        random_state=1,
+    )
+    tunner.maximize(init_points=2,n_iter=3)
+
+    weights = [weight for key, weight in tunner.max['params'].items()]
+    we = weights[:3]
+    penal = weights[4]
+    penal = 0
+    norm_we = [float(i)/sum(we) for i in we]
+
+
+    return norm_we, penal

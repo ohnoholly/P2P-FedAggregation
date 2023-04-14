@@ -91,3 +91,10 @@ def create_list(num_list):
         name_list.append(li)
 
     return name_list
+
+def masks(size, c):
+    a = torch.ones(size)
+    a = (1/c) * a
+    a = torch.bernoulli(a)
+
+    return a
