@@ -125,10 +125,13 @@ if __name__ == "__main__":
     else:
         attack_mode = args.attack_mode
 
-    # Create a random network
-    #adj_list = create_network(50)
-    #Default an incomplete graph
-    adj_list=[[0,1,1,1,1], [1,0,1,1,0], [1,1,0,0,1], [1,1,0,0,0], [1,0,1,0,0]]
+
+    if args.random_network:
+        # Create a random network
+        adj_list = create_network(args.num_client)
+    else:
+        #Default incomplete graph
+        adj_list=[[0,1,1,1,1], [1,0,1,1,0], [1,1,0,0,1], [1,1,0,0,0], [1,0,1,0,0]]
 
 
     if args.rebalancer ==1:

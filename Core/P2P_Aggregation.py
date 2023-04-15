@@ -77,7 +77,7 @@ class TopKCompressor():
 
 
     @staticmethod
-    def compress(tensor, id_node, beta, ratio=0.5):
+    def compress(tensor, id_node, beta, ratio=0.6):
 
         with torch.no_grad():
             mask = torch.zeros_like(tensor)
