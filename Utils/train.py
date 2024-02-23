@@ -412,7 +412,7 @@ def merge_models_ptp(u_or, u_dest, nusers, comb):
 
 
 def trainFA_imbalanced(the_model, training_data, training_labels, lam, g_epochs,
-                        partial_epochs, device, batch_size=128, iid=True, test_data='', test_labels='',
+                        partial_epochs, device='cpu', batch_size=128, iid=True, test_data='', test_labels='',
                         gdata='', glabel=''):
 
     nusers = len(training_labels)
