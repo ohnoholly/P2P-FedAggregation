@@ -9,20 +9,20 @@ Please cite: \
 
 
 ## Use the code:
-`$ python main.py`
+`$ python main.py` \
 Arguments:
 *	Train_dataset: string, mandatory: The dataset that is going to be executed.
 *	-–balanced, Boolean, optional: It decides whether the data is split class-wise evenly for every client.
 *	–fiveclient, Boolean, optional: The data is distributed to 5 clients for default experiment
 *	–rebalancer, integer, mandatory: It is mandatory argument. If given 1, use the Data Rebalancer only for experiment
--	1: Use the Data Rebalancer only
--	Else: SparsFA
+  -	1: Use the Data Rebalancer only
+  -	Else: SparsFA
 *	–attack_mode, integer, optional: Choose different types of attack.
--	0: No attack is performed.
--	1: Label Flipping attack.
--	2: Data Noise attack.
--	3: Objective Function Poisoning attack
--	4: Byzantine attack  
+  -	0: No attack is performed.
+  -	1: Label Flipping attack.
+  -	2: Data Noise attack.
+  -	3: Objective Function Poisoning attack
+  -	4: Byzantine attack  
 *	–num_ads, integer, optional: Provide the number of the adversaries.
 *	--random_network, Boolean, optional: Generate a random network
 *	–num_client, integer, optional: If the random_network is specified, please provide the number of the clients joining the network.
